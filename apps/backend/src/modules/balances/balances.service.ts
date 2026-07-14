@@ -98,4 +98,40 @@ export class BalancesService {
 
     return tx.hold.findUniqueOrThrow({ where: { id: hold.id } });
   }
+
+  /**
+   * Un-reserves part of a hold (locked → available) as a fill or STP/market
+   * remainder consumes it — the inverse of the proportional slice `lockFunds`
+   * reserved for that quantity. The caller (MatchingService) immediately
+   * moves the released `available` funds onward via a normal ledger
+   * transaction, so any price-improvement slack (limit price better than the
+   * fill price) is left behind in `available` automatically.
+   *
+   * Reduces Hold.amount by exactly `amount`; flips to CONSUMED once it hits
+   * zero. Never throws on a stale/zeroed hold — matching only ever calls
+   * this with amounts it already knows are outstanding.
+   */
+  async reduceHold(tx: Tx, orderId: string, amount: Decimal) {
+    const hold = await tx.hold.findUnique({ where: { orderId } });
+    if (!hold || hold.status !== HoldStatus.ACTIVE || amount.lessThanOrEqualTo(0)) {
+      return;
+    }
+
+    const amountStr = amount.toString();
+    await tx.account.update({
+      where: { id: hold.accountId },
+      data: {
+        locked: { decrement: amountStr },
+        available: { increment: amountStr },
+      },
+    });
+
+    const remaining = hold.amount.minus(amount);
+    await tx.hold.update({
+      where: { id: hold.id },
+      data: remaining.lessThanOrEqualTo(0)
+        ? { amount: 0, status: HoldStatus.CONSUMED, releasedAt: new Date() }
+        : { amount: remaining.toString() },
+    });
+  }
 }

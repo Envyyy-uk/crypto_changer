@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { Decimal } from '@crypto-exchange/validation';
 import { OrdersService } from './orders.service';
 
 const MARKET = {
@@ -15,14 +16,16 @@ const MARKET = {
   minimumNotional: '5',
 };
 
-function buildService(overrides: { market?: any; order?: any } = {}) {
+function buildService(overrides: { market?: any; order?: any; book?: any } = {}) {
   const txOrderCreate = jest.fn().mockImplementation(({ data }) =>
     Promise.resolve({ id: 'order-1', ...data }),
   );
   const tx = {
     order: {
       create: txOrderCreate,
-      findUnique: jest.fn().mockResolvedValue(overrides.order),
+      findUnique: jest.fn().mockResolvedValue(
+        overrides.order && { market: { symbol: MARKET.symbol }, ...overrides.order },
+      ),
       update: jest.fn().mockImplementation(({ data }) =>
         Promise.resolve({ ...overrides.order, ...data }),
       ),
@@ -38,8 +41,14 @@ function buildService(overrides: { market?: any; order?: any } = {}) {
     lockFunds: jest.fn().mockResolvedValue({}),
     releaseHold: jest.fn().mockResolvedValue({}),
   } as any;
+  const matching = {
+    // Default: order rests untouched, mirroring "no counter-liquidity yet".
+    submitAndSettle: jest.fn().mockImplementation((order: any) => Promise.resolve(order)),
+    cancelResting: jest.fn(),
+    getSnapshot: jest.fn().mockReturnValue(overrides.book ?? { bids: [], asks: [] }),
+  } as any;
 
-  return { service: new OrdersService(prisma, markets, balances), tx, balances };
+  return { service: new OrdersService(prisma, markets, balances, matching), tx, balances, matching };
 }
 
 const validDto = {
@@ -56,11 +65,19 @@ describe('OrdersService.createOrder', () => {
     await expect(service.createOrder('u1', validDto)).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('rejects MARKET orders until the matching engine exists', async () => {
-    const { service } = buildService();
+  it('rejects a MARKET order when the opposing book is empty', async () => {
+    const { service } = buildService({ book: { bids: [], asks: [] } });
     await expect(
-      service.createOrder('u1', { ...validDto, type: 'MARKET' }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+      service.createOrder('u1', { symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', quantity: '0.01' }),
+    ).rejects.toThrow(/liquidity/);
+  });
+
+  it('accepts a MARKET order and hands it to the matching engine', async () => {
+    const { service, matching } = buildService({
+      book: { bids: [], asks: [{ price: new Decimal('66000'), quantity: new Decimal('1') }] },
+    });
+    await service.createOrder('u1', { symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', quantity: '0.01' });
+    expect(matching.submitAndSettle).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a price not aligned to tick size', async () => {
@@ -100,6 +117,16 @@ describe('OrdersService.createOrder', () => {
     expect(lock.assetSymbol).toBe('BTC');
     expect(lock.amount.toString()).toBe('0.01');
   });
+
+  it('hands every created order to the matching engine', async () => {
+    const { service, matching } = buildService();
+    const order = await service.createOrder('u1', validDto);
+    expect(matching.submitAndSettle).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'order-1' }),
+      expect.objectContaining({ symbol: 'BTCUSDT' }),
+    );
+    expect(order).toBeDefined();
+  });
 });
 
 describe('OrdersService.cancelOrder', () => {
@@ -117,12 +144,13 @@ describe('OrdersService.cancelOrder', () => {
     await expect(service.cancelOrder('u1', 'order-1')).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('cancels an open order and releases its hold', async () => {
-    const { service, balances } = buildService({
+  it('cancels an open order, releases its hold, and removes it from the book', async () => {
+    const { service, balances, matching } = buildService({
       order: { id: 'order-1', userId: 'u1', status: 'OPEN' },
     });
     const result = await service.cancelOrder('u1', 'order-1');
     expect(result.status).toBe('CANCELLED');
     expect(balances.releaseHold).toHaveBeenCalledWith(expect.anything(), 'order-1');
+    expect(matching.cancelResting).toHaveBeenCalledWith('BTCUSDT', 'order-1');
   });
 });

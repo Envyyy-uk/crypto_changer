@@ -66,36 +66,38 @@
 - [x] Окремий order book на кожен ринок (in-memory ядро, `matching/engine/order-book.ts`)
 - [x] Buy: найвища ціна перша; Sell: найнижча перша; при рівній ціні — FIFO за часом
 - [x] Агрегований snapshot рівнів (для майбутнього `GET /api/orderbook/:symbol`)
-- [ ] Відновлення стакана з БД після рестарту ← чекає БД
-- [ ] `GET /api/orderbook/:symbol` endpoint ← чекає інтеграції
+- [x] Відновлення стакана з БД після рестарту (`MatchingService.onModuleInit`, FIFO за createdAt) — перевірено логом "Matching engines ready... N resting order(s) restored"
+- [ ] `GET /api/orderbook/:symbol` REST endpoint (снепшот вже є через `MatchingService.getSnapshot`, лишається обгорнути контролером)
 
 ### 2.2 Matching engine (TASK-024…025)
 - [x] Крос: виконання коли best Bid ≥ best Ask (ядро, `matching/engine/matching-engine.ts`)
 - [x] Повне виконання (FILLED) і часткове (PARTIALLY_FILLED) з коректними залишками
 - [x] Ціна виконання = ціна maker-ордера
-- [ ] Атомарність: trade + баланси + статуси ордерів в одній DB-транзакції ← чекає БД
-- [ ] Консумація holds при виконанні (ACTIVE → CONSUMED) ← чекає БД
+- [x] Атомарність: `MatchingService.submitAndSettle` — Trade + баланси (reduceHold) + статуси ордерів в одній Prisma-транзакції
+- [x] Консумація holds при виконанні (ACTIVE → CONSUMED через `BalancesService.reduceHold`, пропорційно щодо власної ціни ордера — природно реалізує price-improvement refund для покупця)
+- [x] **Перевірено на реальних двох користувачах**: SELL 0.01 BTC@60000 проти resting BUY@60100 → FILLED за ціною мейкера 60100 (продавець отримав price improvement), Trade-рядок і 6 ledger-записів збалансовані (Σdebit=Σcredit=601.01)
 
 ### 2.3 Market-ордери (TASK-026)
 - [x] Проходження по кількох рівнях стакана (ядро; залишок скасовується, не лягає в стакан)
 - [x] Розрахунок середньої ціни виконання (перевірено тестом: 1802 ÷ 0.03 = 60066.67)
-- [x] Відхилення при порожньому стакані
-- [ ] Захист: max price deviation ← при інтеграції
+- [x] Відхилення при порожньому стакані — і в ядрі, і в API (`resolveMarketReservePrice` перевіряє снепшот перед створенням ордера)
+- [x] Резервування для MARKET BUY: cap-ціна = найкращий ask × 1.10 (буфер прослизання), надлишок автоматично повертається тим самим price-improvement механізмом. **Перевірено наживо**: MARKET BUY 0.005 BTC проти resting SELL@61000 → FILLED за 61000, зайвий резерв (67100 cap) повністю повернувся, `locked` після операції = 0
+- [ ] Захист: max price deviation (окрема перевірка понад cap-буфер) — не реалізовано
 
 ### 2.4 Комісії (TASK-027)
-- [ ] maker/taker fee з конфігурації ринку (0.1%)
-- [ ] Округлення до precision quote-активу
-- [ ] Зарахування на системний рахунок FEE_REVENUE через ledger
+- [x] maker/taker fee з конфігурації ринку (0.1%), окремо для сторони-мейкера і сторони-тейкера
+- [x] Комісія береться з активу, який сторона отримує (покупець — у базовому активі, продавець — у quote), округлення природне через Decimal(36,18)
+- [x] Зарахування на системний рахунок FEE_REVENUE через ledger (окремо base і quote FEE_REVENUE-рахунки)
 
 ### 2.5 Захист engine (TASK-028)
-- [x] Self-trade prevention (cancel-taker: залишок taker скасовується, resting-ордер недоторканий)
+- [x] Self-trade prevention (cancel-taker: залишок taker скасовується, resting-ордер недоторканий, rejectReason='SELF_TRADE_PREVENTED')
 - [ ] Maximum order size
 - [ ] Idempotency key на створення ордера
-- [ ] Захист від подвійного виконання
+- [x] Захист від подвійного виконання: вся розрахункова частина йде в одній Prisma-транзакції; двофазний дизайн (лок коштів окремою транзакцією, потім matching+settle) — якщо друга транзакція впаде, ордер лишається OPEN з залоченими коштами (безпечний відкат), а не в напіврозрахованому стані
 
 ### 2.6 Угоди та історія (TASK-029…030)
-- [ ] Модель Trade: maker/taker ордери, buyer/seller, price, quantity, fees
-- [ ] `GET /api/trades/history` (пагінація, фільтри за ринком і датою)
+- [x] Модель Trade: maker/taker ордери, buyer/seller, price, quantity, quoteAmount, makerFee, takerFee — заповнюється `MatchingService.settleFill`
+- [x] `GET /api/trades/history` (пагінація, фільтр за ринком) — перевірено наживо, показує реальну угоду
 
 ### 2.7 Ринкові дані (TASK-017…019)
 - [x] Підключення до публічного WebSocket Binance: ціна, 24h change, high/low, volume

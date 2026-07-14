@@ -11,8 +11,8 @@ Monorepo (npm workspaces). One NestJS backend exposes a REST API under `/api`; P
 └────────────┘             │  auth ── users ── audit        │
 ┌────────────┐             │  assets ── markets             │
 │   Admin    │ ──────────► │  ledger ── balances ── holds   │
-└────────────┘             │  orders ── matching (M2)       │
-┌────────────┐             │  trades (M2) ── market-data(M2)│
+└────────────┘             │  orders ── matching ── trades  │
+┌────────────┐             │  market-data                   │
 │ MM bot (M3)│ ──────────► │  wallets (M4) ── p2p (M5)      │
 └────────────┘             └───────┬────────────────┬───────┘
                                    │                │
@@ -29,7 +29,8 @@ Monorepo (npm workspaces). One NestJS backend exposes a REST API under `/api`; P
 | `markets` | Trading pairs, tick size / step / notional / fee config | M1 |
 | `ledger` | Double-entry transactions, system accounts | M1 |
 | `balances` | Per-user per-asset available/locked, fund holds | M1 |
-| `orders` | Limit order placement/cancellation, validation | M1 |
+| `orders` | Order placement/cancellation, validation (LIMIT + MARKET) | M1/M2 |
+| `matching` | Per-market price-time priority engine, settlement (fills, fees, holds) | M2 |
 | `trades` | Executions, fills, fee records | M2 |
 | `market-data` | External price feed ingestion, candles, WS fan-out | M2 |
 | `wallets` | Deposit/withdrawal simulator, later testnet adapters | M4 |

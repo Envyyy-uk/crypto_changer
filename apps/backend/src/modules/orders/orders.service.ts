@@ -6,18 +6,29 @@ import {
 } from '@nestjs/common';
 import {
   computeNotional,
+  Decimal,
   isMultipleOf,
   isPositive,
   toDecimal,
 } from '@crypto-exchange/validation';
-import { MarketStatus, OrderSide, OrderStatus, OrderType, Prisma } from '@prisma/client';
+import { MarketStatus, OrderSide, OrderStatus, OrderType } from '@prisma/client';
 import { InsufficientBalanceError } from '../../common/errors/domain.errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BalancesService } from '../balances/balances.service';
+import { MatchingService } from '../matching/matching.service';
 import { MarketsService } from '../markets/markets.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 
 const OPEN_STATUSES: OrderStatus[] = [OrderStatus.OPEN, OrderStatus.PARTIALLY_FILLED];
+
+// Market orders have no limit price, so the amount to reserve for the quote
+// side is unknown up front. We cap it at the best opposing price plus this
+// buffer, to absorb walking a few levels of the book before settling; any
+// unused reserve is refunded automatically once the real fill prices are known
+// (see MatchingService — the same price-improvement mechanism limit orders use).
+const MARKET_ORDER_SLIPPAGE_BUFFER = new Decimal('1.10');
+
+type MarketWithAssets = Awaited<ReturnType<MarketsService['findBySymbolOrThrow']>>;
 
 @Injectable()
 export class OrdersService {
@@ -25,6 +36,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly markets: MarketsService,
     private readonly balances: BalancesService,
+    private readonly matching: MatchingService,
   ) {}
 
   async createOrder(userId: string, dto: CreateOrderDto) {
@@ -33,26 +45,10 @@ export class OrdersService {
     if (market.status !== MarketStatus.ACTIVE) {
       throw new BadRequestException(`Market ${market.symbol} is not accepting orders`);
     }
-    if (dto.type !== OrderType.LIMIT) {
-      throw new BadRequestException(
-        'Only LIMIT orders are supported until the matching engine ships (Milestone 2)',
-      );
+    if (!isPositive(dto.quantity)) {
+      throw new BadRequestException('Quantity must be positive');
     }
-    if (!dto.price) {
-      throw new BadRequestException('LIMIT orders require a price');
-    }
-    if (!isPositive(dto.price) || !isPositive(dto.quantity)) {
-      throw new BadRequestException('Price and quantity must be positive');
-    }
-
-    const price = toDecimal(dto.price);
     const quantity = toDecimal(dto.quantity);
-
-    if (!isMultipleOf(price, market.tickSize.toString())) {
-      throw new BadRequestException(
-        `Price must be a multiple of tick size ${market.tickSize.toString()}`,
-      );
-    }
     if (!isMultipleOf(quantity, market.quantityStep.toString())) {
       throw new BadRequestException(
         `Quantity must be a multiple of quantity step ${market.quantityStep.toString()}`,
@@ -63,6 +59,11 @@ export class OrdersService {
         `Quantity is below the minimum ${market.minimumQuantity.toString()}`,
       );
     }
+
+    const price =
+      dto.type === OrderType.LIMIT
+        ? this.resolveLimitPrice(dto, market)
+        : this.resolveMarketReservePrice(dto, market);
 
     const notional = computeNotional(price, quantity);
     if (notional.lessThan(market.minimumNotional.toString())) {
@@ -77,9 +78,10 @@ export class OrdersService {
         ? { assetId: market.quoteAssetId, assetSymbol: market.quoteAsset.symbol, amount: notional }
         : { assetId: market.baseAssetId, assetSymbol: market.baseAsset.symbol, amount: quantity };
 
+    let order;
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        const order = await tx.order.create({
+      order = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.order.create({
           data: {
             userId,
             marketId: market.id,
@@ -97,10 +99,10 @@ export class OrdersService {
           assetId: lock.assetId,
           assetSymbol: lock.assetSymbol,
           amount: lock.amount,
-          orderId: order.id,
+          orderId: created.id,
         });
 
-        return order;
+        return created;
       });
     } catch (error) {
       if (error instanceof InsufficientBalanceError) {
@@ -108,11 +110,49 @@ export class OrdersService {
       }
       throw error;
     }
+
+    return this.matching.submitAndSettle(order, market);
+  }
+
+  /** LIMIT: the user's own price, validated against the market's tick size. */
+  private resolveLimitPrice(dto: CreateOrderDto, market: MarketWithAssets): Decimal {
+    if (!dto.price) {
+      throw new BadRequestException('LIMIT orders require a price');
+    }
+    if (!isPositive(dto.price)) {
+      throw new BadRequestException('Price must be positive');
+    }
+    const price = toDecimal(dto.price);
+    if (!isMultipleOf(price, market.tickSize.toString())) {
+      throw new BadRequestException(
+        `Price must be a multiple of tick size ${market.tickSize.toString()}`,
+      );
+    }
+    return price;
+  }
+
+  /**
+   * MARKET: no user-supplied price. BUY reserves against the best ask plus a
+   * slippage buffer (refunded automatically as real fills settle); SELL's
+   * reserve is price-independent, so the reference price only fills the
+   * mandatory `price` column for audit purposes. Either side requires the
+   * opposing book to have depth — an empty book means there is nothing to
+   * reference or match against.
+   */
+  private resolveMarketReservePrice(dto: CreateOrderDto, market: MarketWithAssets): Decimal {
+    const book = this.matching.getSnapshot(market.symbol);
+    const bestOpposing = dto.side === OrderSide.BUY ? book?.asks[0] : book?.bids[0];
+    if (!bestOpposing) {
+      throw new BadRequestException('No liquidity available for a market order right now');
+    }
+    return dto.side === OrderSide.BUY
+      ? bestOpposing.price.times(MARKET_ORDER_SLIPPAGE_BUFFER)
+      : bestOpposing.price;
   }
 
   async cancelOrder(userId: string, orderId: string) {
     return this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({ where: { id: orderId } });
+      const order = await tx.order.findUnique({ where: { id: orderId }, include: { market: true } });
       if (!order || order.userId !== userId) {
         throw new NotFoundException('Order not found');
       }
@@ -125,9 +165,10 @@ export class OrdersService {
         data: { status: OrderStatus.CANCELLED },
       });
 
-      // Releases only what is still held; the filled portion (Milestone 2)
-      // will have consumed part of the hold already.
+      // Releases only what is still held; any filled portion already
+      // consumed its share of the hold via MatchingService.
       await this.balances.releaseHold(tx, order.id);
+      this.matching.cancelResting(order.market.symbol, order.id);
 
       return cancelled;
     });
