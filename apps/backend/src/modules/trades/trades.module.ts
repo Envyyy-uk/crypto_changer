@@ -1,5 +1,10 @@
 import { Module } from '@nestjs/common';
+import { TradesController } from './trades.controller';
+import { TradesService } from './trades.service';
 
-// Placeholder module — implemented in a later milestone (see documentation/roadmap.md).
-@Module({})
+@Module({
+  controllers: [TradesController],
+  providers: [TradesService],
+  exports: [TradesService],
+})
 export class TradesModule {}

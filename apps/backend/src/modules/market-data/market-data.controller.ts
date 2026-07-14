@@ -1,5 +1,14 @@
-import { Controller, Get, NotFoundException, Param } from '@nestjs/common';
-import { MarketDataService } from './market-data.service';
+import {
+  BadGatewayException,
+  BadRequestException,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  ParseIntPipe,
+  Query,
+} from '@nestjs/common';
+import { isKlineInterval, MarketDataService } from './market-data.service';
 
 @Controller('market-data')
 export class MarketDataController {
@@ -17,5 +26,21 @@ export class MarketDataController {
       throw new NotFoundException(`No ticker for ${symbol.toUpperCase()} (feed warming up?)`);
     }
     return ticker;
+  }
+
+  @Get('klines/:symbol')
+  async getKlines(
+    @Param('symbol') symbol: string,
+    @Query('interval') interval = '1h',
+    @Query('limit', new ParseIntPipe({ optional: true })) limit = 500,
+  ) {
+    if (!isKlineInterval(interval)) {
+      throw new BadRequestException('interval must be one of: 1m, 5m, 15m, 1h, 4h, 1d');
+    }
+    try {
+      return await this.marketData.getKlines(symbol, interval, limit);
+    } catch {
+      throw new BadGatewayException('Candles are temporarily unavailable');
+    }
   }
 }

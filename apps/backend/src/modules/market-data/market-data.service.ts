@@ -7,6 +7,23 @@ const TRACKED_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'] as const;
 const STALENESS_MS = 10_000;
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
+const KLINE_INTERVALS = ['1m', '5m', '15m', '1h', '4h', '1d'] as const;
+const KLINES_REST_URL = 'https://api.binance.com/api/v3/klines';
+
+export type KlineInterval = (typeof KLINE_INTERVALS)[number];
+
+export interface Candle {
+  time: number; // unix seconds (Lightweight Charts convention)
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  volume: string;
+}
+
+export function isKlineInterval(value: string): value is KlineInterval {
+  return (KLINE_INTERVALS as readonly string[]).includes(value);
+}
 
 interface StoredTicker extends Omit<Ticker, 'updatedAt' | 'stale'> {
   updatedAtMs: number;
@@ -55,6 +72,30 @@ export class MarketDataService extends EventEmitter implements OnModuleInit, OnM
 
   getTicker(symbol: string): Ticker | undefined {
     return this.getTickers().find((t) => t.symbol === symbol.toUpperCase());
+  }
+
+  /**
+   * Proxies historical candles from the upstream REST API (public, no key).
+   * Once candles are persisted locally (Milestone 2), this becomes the
+   * fallback for gaps only.
+   */
+  async getKlines(symbol: string, interval: KlineInterval, limit: number): Promise<Candle[]> {
+    const url =
+      `${KLINES_REST_URL}?symbol=${encodeURIComponent(symbol.toUpperCase())}` +
+      `&interval=${interval}&limit=${Math.min(Math.max(limit, 1), 1000)}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Upstream klines request failed: ${response.status}`);
+    }
+    const rows = (await response.json()) as unknown[][];
+    return rows.map((row) => ({
+      time: Math.floor(Number(row[0]) / 1000),
+      open: String(row[1]),
+      high: String(row[2]),
+      low: String(row[3]),
+      close: String(row[4]),
+      volume: String(row[5]),
+    }));
   }
 
   private connect() {

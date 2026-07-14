@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, isLoggedIn } from '../api/client';
 import { Balance, Market, Order } from '../api/types';
+import CandleChart from '../components/CandleChart';
 import { formatPrice, useTickers } from '../hooks/useTickers';
 
 export default function TradePage() {
@@ -128,13 +129,9 @@ export default function TradePage() {
           </table>
         </div>
 
-        {/* Middle: chart placeholder + order book placeholder */}
-        <div className="panel" style={{ minHeight: 320 }}>
-          <h2>Chart</h2>
-          <p className="muted">
-            Candlestick chart (Lightweight Charts) and the CX order book land in Milestone 3 —
-            after the matching engine is wired to the database.
-          </p>
+        {/* Middle: candlestick chart (live external data) */}
+        <div className="panel" style={{ minHeight: 440 }}>
+          <CandleChart symbol={symbol.toUpperCase()} />
         </div>
 
         {/* Right: order form */}

@@ -98,6 +98,8 @@ model User {
   accounts    Account[]
   orders      Order[]
   loginAudits LoginAudit[]
+  buyerTrades  Trade[]     @relation("BuyerTrades")
+  sellerTrades Trade[]     @relation("SellerTrades")
 
   @@map("users")
 }
@@ -157,6 +159,7 @@ model Market {
   updatedAt       DateTime     @updatedAt @map("updated_at")
 
   orders Order[]
+  trades Trade[]
 
   @@map("markets")
 }
@@ -250,9 +253,40 @@ model Order {
   createdAt         DateTime    @default(now()) @map("created_at")
   updatedAt         DateTime    @updatedAt @map("updated_at")
 
-  hold Hold?
+  hold        Hold?
+  makerTrades Trade[] @relation("MakerOrder")
+  takerTrades Trade[] @relation("TakerOrder")
 
   @@index([userId, status])
   @@index([marketId, status, side])
   @@map("orders")
+}
+
+// ============================================================
+// Trades (fills) — populated by the matching engine
+// ============================================================
+
+model Trade {
+  id           String   @id @default(uuid())
+  marketId     String   @map("market_id")
+  market       Market   @relation(fields: [marketId], references: [id])
+  makerOrderId String   @map("maker_order_id")
+  makerOrder   Order    @relation("MakerOrder", fields: [makerOrderId], references: [id])
+  takerOrderId String   @map("taker_order_id")
+  takerOrder   Order    @relation("TakerOrder", fields: [takerOrderId], references: [id])
+  buyerId      String   @map("buyer_id")
+  buyer        User     @relation("BuyerTrades", fields: [buyerId], references: [id])
+  sellerId     String   @map("seller_id")
+  seller       User     @relation("SellerTrades", fields: [sellerId], references: [id])
+  price        Decimal  @db.Decimal(36, 18)
+  quantity     Decimal  @db.Decimal(36, 18)
+  quoteAmount  Decimal  @map("quote_amount") @db.Decimal(36, 18)
+  makerFee     Decimal  @map("maker_fee") @db.Decimal(36, 18)
+  takerFee     Decimal  @map("taker_fee") @db.Decimal(36, 18)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([marketId, createdAt])
+  @@index([buyerId, createdAt])
+  @@index([sellerId, createdAt])
+  @@map("trades")
 }
