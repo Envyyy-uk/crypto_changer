@@ -110,15 +110,18 @@
 ## Майлстоун 3 — Торговий інтерфейс
 
 ### 3.1 Frontend-каркас (TASK-031)
-- [ ] React + Vite + TypeScript в `apps/frontend`
-- [ ] Сторінки: /login, /register, /markets, /trade/:symbol, /wallet, /orders, /settings
-- [ ] Авторизація: зберігання токенів, auto-refresh, guards
+- [x] React + Vite + TypeScript в `apps/frontend` (dark exchange theme)
+- [x] Сторінки: /login, /register, /markets, /trade/:symbol, /wallet, /orders (settings — пізніше)
+- [x] Авторизація: зберігання токенів, auto-refresh при 401, route guards
+- [x] Vite proxy на backend (/api, /ws), `host: true` для доступу з телефона
 
 ### 3.2 Торгова сторінка (TASK-032…034)
-- [ ] Layout: markets | chart | order book / balance | buy-sell form | recent trades / відкриті ордери | історія
-- [ ] Графік свічок (Lightweight Charts) з перемиканням таймфреймів
-- [ ] Форма Buy/Sell: Market/Limit, Total = Price × Quantity, комісія, доступний баланс
-- [ ] Live-оновлення через WebSocket: ціна, стакан, угоди, ордери, баланс
+- [x] Layout: market info | chart-зона | форма Buy/Sell + відкриті ордери знизу
+- [x] Форма Buy/Sell (Limit): Total = Price × Quantity, комісія, доступний баланс, скасування ордерів
+- [x] Live-ціни через власний WebSocket /ws (markets + trade сторінки, LIVE/STALE бейджі)
+- [ ] Графік свічок (Lightweight Charts) з перемиканням таймфреймів ← чекає БД (свічки)
+- [ ] Стакан і стрічка угод у UI ← після інтеграції engine
+- [ ] Live-оновлення ордерів/балансу через WS (зараз — refresh після дій)
 
 ### 3.3 Маркетмейкер (TASK-035)
 - [ ] Окремий системний користувач з тестовими BTC/ETH/SOL/USDT
