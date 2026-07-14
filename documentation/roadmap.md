@@ -12,15 +12,15 @@
 - [x] `.gitignore`, `.env.example`, `README.md`, `documentation/`
 - [x] `docker-compose.yml`: PostgreSQL 16, Redis 7, Adminer (+healthchecks, volumes)
 - [x] Перший коміт, репозиторій на GitHub (`Envyyy-uk/crypto_changer`)
-- [ ] 🔄 Docker Desktop встановлений і `docker compose up -d` перевірений ← **чекає користувача**
+- [x] Docker Desktop встановлений, `docker compose up -d` — postgres/redis/adminer healthy
 
 ### 1.2 Backend-каркас (TASK-004…005)
 - [x] NestJS-застосунок, глобальний префікс `/api`
 - [x] `GET /api/health` → `{"status":"ok"}`
 - [x] Всі 14 модулів створені (7 робочих + 7 заглушок: trades, market-data, wallets, admin, notifications, audit, p2p)
 - [x] Prisma-схема повністю описана (snake_case таблиці)
-- [ ] Перша міграція застосована до PostgreSQL ← чекає Docker
-- [ ] Seed виконаний (4 активи, 3 ринки) ← чекає Docker
+- [x] Перша міграція застосована до PostgreSQL (`20260714220717_init`)
+- [x] Seed виконаний (4 активи, 3 ринки)
 
 ### 1.3 Користувачі та вхід (TASK-006…008)
 - [x] Модель User: role (USER/SUPPORT/ADMIN/SUPER_ADMIN), status (ACTIVE/SUSPENDED/BLOCKED), 2FA-поля
@@ -56,7 +56,7 @@
 ### 1.7 Тести та верифікація
 - [x] Unit-тести: ledger-інваріанти (5), ордери (9), decimal-правила (8) — 23 зелених
 - [x] Build чистий, сервер стартує, health перевірений
-- [ ] E2E через живу БД: реєстрація → баланс → ордер → скасування ← чекає Docker
+- [x] E2E через живу БД: реєстрація → 100000 USDT (ledger DEBIT/CREDIT перевірено в psql) → Limit Buy 0.01 BTC@60000 → locked 600 → cancel → available 100000. Перевірено і через curl, і через живий браузерний UI
 
 ---
 
