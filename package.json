@@ -1,0 +1,28 @@
+{
+  "name": "crypto-exchange",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local spot crypto exchange platform — matching, double-entry ledger, P2P (educational sandbox, no real funds)",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build:packages && npm run build -w apps/backend",
+    "build:packages": "npm run build -w packages/config -w packages/shared-types -w packages/validation",
+    "dev:backend": "npm run start:dev -w apps/backend",
+    "test": "npm run test -w packages/validation -w apps/backend",
+    "prisma:generate": "npm run prisma:generate -w apps/backend",
+    "prisma:migrate": "npm run prisma:migrate -w apps/backend",
+    "prisma:seed": "npm run prisma:seed -w apps/backend",
+    "format": "prettier --write \"apps/**/src/**/*.ts\" \"packages/**/src/**/*.ts\""
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3"
+  }
+}

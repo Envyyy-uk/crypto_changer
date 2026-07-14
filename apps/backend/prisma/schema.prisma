@@ -1,0 +1,258 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Enums
+// ============================================================
+
+enum UserRole {
+  USER
+  SUPPORT
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+}
+
+enum MarketStatus {
+  ACTIVE
+  HALTED
+  CANCEL_ONLY
+  DISABLED
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderType {
+  MARKET
+  LIMIT
+}
+
+enum OrderStatus {
+  NEW
+  OPEN
+  PARTIALLY_FILLED
+  FILLED
+  CANCELLED
+  REJECTED
+}
+
+enum AccountType {
+  USER
+  SYSTEM
+}
+
+enum LedgerEntryDirection {
+  DEBIT
+  CREDIT
+}
+
+enum LedgerTransactionType {
+  TEST_LIQUIDITY_GRANT
+  TRADE_FILL
+  FEE
+  DEPOSIT
+  WITHDRAWAL
+  P2P_ESCROW
+  P2P_RELEASE
+  P2P_REFUND
+  ADMIN_ADJUSTMENT
+}
+
+enum HoldStatus {
+  ACTIVE
+  RELEASED
+  CONSUMED
+}
+
+// ============================================================
+// Identity & audit
+// ============================================================
+
+model User {
+  id                  String     @id @default(uuid())
+  email               String     @unique
+  passwordHash        String     @map("password_hash")
+  role                UserRole   @default(USER)
+  status              UserStatus @default(ACTIVE)
+  emailVerified       Boolean    @default(false) @map("email_verified")
+  twoFactorEnabled    Boolean    @default(false) @map("two_factor_enabled")
+  failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?  @map("locked_until")
+  createdAt           DateTime   @default(now()) @map("created_at")
+  updatedAt           DateTime   @updatedAt @map("updated_at")
+
+  accounts    Account[]
+  orders      Order[]
+  loginAudits LoginAudit[]
+
+  @@map("users")
+}
+
+model LoginAudit {
+  id            String   @id @default(uuid())
+  userId        String?  @map("user_id")
+  user          User?    @relation(fields: [userId], references: [id])
+  email         String
+  success       Boolean
+  failureReason String?  @map("failure_reason")
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([email, createdAt])
+  @@map("login_audits")
+}
+
+// ============================================================
+// Assets & markets
+// ============================================================
+
+model Asset {
+  id                String   @id @default(uuid())
+  symbol            String   @unique
+  name              String
+  decimals          Int
+  depositEnabled    Boolean  @default(true) @map("deposit_enabled")
+  withdrawalEnabled Boolean  @default(true) @map("withdrawal_enabled")
+  tradingEnabled    Boolean  @default(true) @map("trading_enabled")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  baseMarkets  Market[]  @relation("BaseAsset")
+  quoteMarkets Market[]  @relation("QuoteAsset")
+  accounts     Account[]
+
+  @@map("assets")
+}
+
+model Market {
+  id              String       @id @default(uuid())
+  symbol          String       @unique
+  baseAssetId     String       @map("base_asset_id")
+  baseAsset       Asset        @relation("BaseAsset", fields: [baseAssetId], references: [id])
+  quoteAssetId    String       @map("quote_asset_id")
+  quoteAsset      Asset        @relation("QuoteAsset", fields: [quoteAssetId], references: [id])
+  tickSize        Decimal      @map("tick_size") @db.Decimal(36, 18)
+  quantityStep    Decimal      @map("quantity_step") @db.Decimal(36, 18)
+  minimumQuantity Decimal      @map("minimum_quantity") @db.Decimal(36, 18)
+  minimumNotional Decimal      @map("minimum_notional") @db.Decimal(36, 18)
+  makerFee        Decimal      @map("maker_fee") @db.Decimal(10, 6)
+  takerFee        Decimal      @map("taker_fee") @db.Decimal(10, 6)
+  status          MarketStatus @default(ACTIVE)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  orders Order[]
+
+  @@map("markets")
+}
+
+// ============================================================
+// Ledger (double-entry) & balances
+// ============================================================
+
+model Account {
+  id         String      @id @default(uuid())
+  type       AccountType
+  userId     String?     @map("user_id")
+  user       User?       @relation(fields: [userId], references: [id])
+  systemCode String?     @map("system_code")
+  assetId    String      @map("asset_id")
+  asset      Asset       @relation(fields: [assetId], references: [id])
+  available  Decimal     @default(0) @db.Decimal(36, 18)
+  locked     Decimal     @default(0) @db.Decimal(36, 18)
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+
+  ledgerEntries LedgerEntry[]
+  holds         Hold[]
+
+  @@unique([userId, assetId])
+  @@unique([systemCode, assetId])
+  @@map("accounts")
+}
+
+model LedgerTransaction {
+  id            String                @id @default(uuid())
+  type          LedgerTransactionType
+  referenceType String?               @map("reference_type")
+  referenceId   String?               @map("reference_id")
+  description   String?
+  createdAt     DateTime              @default(now()) @map("created_at")
+
+  entries LedgerEntry[]
+
+  @@index([referenceType, referenceId])
+  @@map("ledger_transactions")
+}
+
+model LedgerEntry {
+  id            String               @id @default(uuid())
+  transactionId String               @map("transaction_id")
+  transaction   LedgerTransaction    @relation(fields: [transactionId], references: [id])
+  accountId     String               @map("account_id")
+  account       Account              @relation(fields: [accountId], references: [id])
+  direction     LedgerEntryDirection
+  amount        Decimal              @db.Decimal(36, 18)
+  createdAt     DateTime             @default(now()) @map("created_at")
+
+  @@index([accountId])
+  @@index([transactionId])
+  @@map("ledger_entries")
+}
+
+model Hold {
+  id         String     @id @default(uuid())
+  accountId  String     @map("account_id")
+  account    Account    @relation(fields: [accountId], references: [id])
+  orderId    String     @unique @map("order_id")
+  order      Order      @relation(fields: [orderId], references: [id])
+  amount     Decimal    @db.Decimal(36, 18)
+  status     HoldStatus @default(ACTIVE)
+  createdAt  DateTime   @default(now()) @map("created_at")
+  releasedAt DateTime?  @map("released_at")
+
+  @@map("holds")
+}
+
+// ============================================================
+// Orders
+// ============================================================
+
+model Order {
+  id                String      @id @default(uuid())
+  userId            String      @map("user_id")
+  user              User        @relation(fields: [userId], references: [id])
+  marketId          String      @map("market_id")
+  market            Market      @relation(fields: [marketId], references: [id])
+  side              OrderSide
+  type              OrderType
+  price             Decimal     @db.Decimal(36, 18)
+  quantity          Decimal     @db.Decimal(36, 18)
+  filledQuantity    Decimal     @default(0) @map("filled_quantity") @db.Decimal(36, 18)
+  remainingQuantity Decimal     @map("remaining_quantity") @db.Decimal(36, 18)
+  status            OrderStatus @default(NEW)
+  rejectReason      String?     @map("reject_reason")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  hold Hold?
+
+  @@index([userId, status])
+  @@index([marketId, status, side])
+  @@map("orders")
+}
