@@ -1,5 +1,6 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { WsAdapter } from '@nestjs/platform-ws';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { DecimalSerializerInterceptor } from './common/interceptors/decimal-serializer.interceptor';
@@ -18,6 +19,7 @@ async function bootstrap() {
     }),
   );
   app.useGlobalInterceptors(new DecimalSerializerInterceptor());
+  app.useWebSocketAdapter(new WsAdapter(app));
   app.enableShutdownHooks();
 
   const port = process.env.PORT ? Number(process.env.PORT) : 3000;
