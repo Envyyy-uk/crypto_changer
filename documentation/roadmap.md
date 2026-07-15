@@ -142,9 +142,11 @@
 ## Майлстоун 4 — Операції
 
 ### 4.1 Депозити/виведення-симулятор (TASK-036…037)
-- [ ] «Add test funds»: вибір активу й суми, статуси PENDING → CONFIRMED/FAILED, через ledger
-- [ ] Виведення: адреса, 2FA-код, статуси PENDING → APPROVED → PROCESSING → COMPLETED/REJECTED
-- [ ] Історія депозитів і виведень
+- [x] «Add test funds»: вибір активу й суми, статуси PENDING → CONFIRMED через ledger (симуляція затримки підтвердження ~2с)
+- [x] Виведення: адреса, статуси PENDING → APPROVED → PROCESSING → COMPLETED (автопрогрес по таймеру, ~1.5с/крок); кошти списуються з available одразу при створенні (system-рахунок WITHDRAWAL_SUSPENSE), без окремого Hold (Hold прив'язаний до Order у схемі)
+- [x] Історія депозитів і виведень (backend + сторінка Wallet: форми + таблиці історії з поллінгом)
+- [ ] 2FA-код при виведенні (DTO вже приймає `twoFactorCode`, але не перевіряється — 2FA ще не реалізовано, чекає Майлстоуна 5)
+- [ ] **Код написаний і зібраний чисто, але НЕ перевірений на живій БД** — Docker Desktop завис під час цієї сесії (~15+ хв, движок не відповідав навіть після повного перезапуску); користувач вирішив зупинитись на цьому до відновлення бази. Коли Docker підніметься: `prisma migrate dev --name add_deposits_withdrawals`, потім E2E (deposit → CONFIRMED → баланс +amount; withdrawal → available -amount одразу → PENDING→APPROVED→PROCESSING→COMPLETED)
 
 ### 4.2 Адмінпанель (TASK-039…040)
 - [ ] `apps/admin` (React) + admin-модуль API з RBAC

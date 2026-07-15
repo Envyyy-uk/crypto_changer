@@ -78,6 +78,21 @@ enum HoldStatus {
   CONSUMED
 }
 
+enum DepositStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
+  FAILED
+}
+
 // ============================================================
 // Identity & audit
 // ============================================================
@@ -95,11 +110,13 @@ model User {
   createdAt           DateTime   @default(now()) @map("created_at")
   updatedAt           DateTime   @updatedAt @map("updated_at")
 
-  accounts    Account[]
-  orders      Order[]
-  loginAudits LoginAudit[]
-  buyerTrades  Trade[]     @relation("BuyerTrades")
-  sellerTrades Trade[]     @relation("SellerTrades")
+  accounts     Account[]
+  orders       Order[]
+  loginAudits  LoginAudit[]
+  buyerTrades  Trade[]       @relation("BuyerTrades")
+  sellerTrades Trade[]       @relation("SellerTrades")
+  deposits     Deposit[]
+  withdrawals  Withdrawal[]
 
   @@map("users")
 }
@@ -134,9 +151,11 @@ model Asset {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
-  baseMarkets  Market[]  @relation("BaseAsset")
-  quoteMarkets Market[]  @relation("QuoteAsset")
+  baseMarkets  Market[]     @relation("BaseAsset")
+  quoteMarkets Market[]     @relation("QuoteAsset")
   accounts     Account[]
+  deposits     Deposit[]
+  withdrawals  Withdrawal[]
 
   @@map("assets")
 }
@@ -289,4 +308,40 @@ model Trade {
   @@index([buyerId, createdAt])
   @@index([sellerId, createdAt])
   @@map("trades")
+}
+
+// ============================================================
+// Wallets: deposit / withdrawal simulator (no real chains yet)
+// ============================================================
+
+model Deposit {
+  id          String        @id @default(uuid())
+  userId      String        @map("user_id")
+  user        User          @relation(fields: [userId], references: [id])
+  assetId     String        @map("asset_id")
+  asset       Asset         @relation(fields: [assetId], references: [id])
+  amount      Decimal       @db.Decimal(36, 18)
+  status      DepositStatus @default(PENDING)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  confirmedAt DateTime?     @map("confirmed_at")
+
+  @@index([userId, createdAt])
+  @@map("deposits")
+}
+
+model Withdrawal {
+  id           String           @id @default(uuid())
+  userId       String           @map("user_id")
+  user         User             @relation(fields: [userId], references: [id])
+  assetId      String           @map("asset_id")
+  asset        Asset            @relation(fields: [assetId], references: [id])
+  amount       Decimal          @db.Decimal(36, 18)
+  address      String
+  status       WithdrawalStatus @default(PENDING)
+  rejectReason String?          @map("reject_reason")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  processedAt  DateTime?        @map("processed_at")
+
+  @@index([userId, createdAt])
+  @@map("withdrawals")
 }

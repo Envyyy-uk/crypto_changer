@@ -1,5 +1,12 @@
 import { Module } from '@nestjs/common';
+import { AssetsModule } from '../assets/assets.module';
+import { LedgerModule } from '../ledger/ledger.module';
+import { WalletsController } from './wallets.controller';
+import { WalletsService } from './wallets.service';
 
-// Placeholder module — implemented in a later milestone (see documentation/roadmap.md).
-@Module({})
+@Module({
+  imports: [AssetsModule, LedgerModule],
+  controllers: [WalletsController],
+  providers: [WalletsService],
+})
 export class WalletsModule {}

@@ -61,6 +61,31 @@ export interface Order {
   market?: { symbol: string };
 }
 
+export interface AssetInfo {
+  symbol: string;
+  name: string;
+}
+
+export interface Deposit {
+  id: string;
+  amount: string;
+  status: 'PENDING' | 'CONFIRMED' | 'FAILED';
+  createdAt: string;
+  confirmedAt: string | null;
+  asset: { symbol: string };
+}
+
+export interface Withdrawal {
+  id: string;
+  amount: string;
+  address: string;
+  status: 'PENDING' | 'APPROVED' | 'PROCESSING' | 'COMPLETED' | 'REJECTED' | 'FAILED';
+  createdAt: string;
+  processedAt: string | null;
+  rejectReason: string | null;
+  asset: { symbol: string };
+}
+
 export interface UserProfile {
   id: string;
   email: string;
