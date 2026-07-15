@@ -4,6 +4,7 @@ import LoginPage from './pages/LoginPage';
 import MarketsPage from './pages/MarketsPage';
 import OrdersPage from './pages/OrdersPage';
 import RegisterPage from './pages/RegisterPage';
+import SettingsPage from './pages/SettingsPage';
 import TradePage from './pages/TradePage';
 import WalletPage from './pages/WalletPage';
 
@@ -28,6 +29,11 @@ function Navbar() {
       <NavLink to="/orders" className={({ isActive }) => `link${isActive ? ' active' : ''}`}>
         Orders
       </NavLink>
+      {loggedIn && (
+        <NavLink to="/settings" className={({ isActive }) => `link${isActive ? ' active' : ''}`}>
+          Settings
+        </NavLink>
+      )}
       <div className="spacer" />
       {loggedIn ? (
         <button
@@ -80,6 +86,14 @@ export default function App() {
           element={
             <RequireAuth>
               <OrdersPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <RequireAuth>
+              <SettingsPage />
             </RequireAuth>
           }
         />

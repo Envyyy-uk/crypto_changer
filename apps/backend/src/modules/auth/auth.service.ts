@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -12,6 +13,7 @@ import * as argon2 from 'argon2';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LedgerService } from '../ledger/ledger.service';
 import { UsersService } from '../users/users.service';
+import { TwoFactorService } from './two-factor.service';
 import { JwtPayload } from './strategies/jwt.strategy';
 
 const ARGON2_OPTIONS: argon2.Options = {
@@ -34,6 +36,7 @@ export class AuthService {
     private readonly ledger: LedgerService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly twoFactor: TwoFactorService,
   ) {}
 
   /**
@@ -69,7 +72,7 @@ export class AuthService {
     return this.users.toPublic(user);
   }
 
-  async login(email: string, password: string, meta: RequestMeta) {
+  async login(email: string, password: string, meta: RequestMeta, twoFactorCode?: string) {
     const normalizedEmail = email.trim().toLowerCase();
     const user = await this.users.findByEmail(normalizedEmail);
 
@@ -95,6 +98,20 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (user.twoFactorEnabled) {
+      if (!twoFactorCode) {
+        // Password was correct — don't count this as a failed attempt, just
+        // tell the client to collect a code and call login again with it.
+        return { requiresTwoFactor: true as const };
+      }
+      const valid = await this.verifyTwoFactorCode(user.id, user.twoFactorSecret, twoFactorCode);
+      if (!valid) {
+        await this.registerFailedAttempt(user.id, user.failedLoginAttempts);
+        await this.audit(user.id, normalizedEmail, false, 'BAD_TWO_FACTOR_CODE', meta);
+        throw new UnauthorizedException('Invalid two-factor code');
+      }
+    }
+
     await this.prisma.user.update({
       where: { id: user.id },
       data: { failedLoginAttempts: 0, lockedUntil: null },
@@ -102,6 +119,98 @@ export class AuthService {
     await this.audit(user.id, normalizedEmail, true, null, meta);
 
     return this.issueTokens(user.id, user.email, user.role);
+  }
+
+  /** GET-able setup step: generates (or re-generates) a pending secret — not yet enabled. */
+  async setupTwoFactor(userId: string) {
+    const user = await this.users.findByIdOrThrow(userId);
+    if (user.twoFactorEnabled) {
+      throw new BadRequestException('Two-factor authentication is already enabled');
+    }
+    const secret = this.twoFactor.generateSecret();
+    await this.prisma.user.update({ where: { id: userId }, data: { twoFactorSecret: secret } });
+
+    const otpAuthUrl = this.twoFactor.buildOtpAuthUrl(user.email, secret);
+    const qrCodeDataUrl = await this.twoFactor.buildQrCodeDataUrl(otpAuthUrl);
+    return { secret, otpAuthUrl, qrCodeDataUrl };
+  }
+
+  /** Verifies the first code against the pending secret, then flips 2FA on and issues backup codes. */
+  async confirmTwoFactor(userId: string, code: string) {
+    const user = await this.users.findByIdOrThrow(userId);
+    if (user.twoFactorEnabled) {
+      throw new BadRequestException('Two-factor authentication is already enabled');
+    }
+    if (!user.twoFactorSecret) {
+      throw new BadRequestException('Call /auth/2fa/setup first');
+    }
+    if (!this.twoFactor.verifyToken(user.twoFactorSecret, code)) {
+      throw new UnauthorizedException('Invalid code');
+    }
+
+    const { plaintext, hashes } = await this.twoFactor.generateBackupCodes();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: userId }, data: { twoFactorEnabled: true } });
+      await tx.twoFactorBackupCode.createMany({
+        data: hashes.map((codeHash) => ({ userId, codeHash })),
+      });
+    });
+
+    return { backupCodes: plaintext };
+  }
+
+  /** Requires the account password AND a valid code, per spec — either always accessible from settings. */
+  async disableTwoFactor(userId: string, password: string, code: string) {
+    const user = await this.users.findByIdOrThrow(userId);
+    if (!user.twoFactorEnabled) {
+      throw new BadRequestException('Two-factor authentication is not enabled');
+    }
+    if (!(await argon2.verify(user.passwordHash, password))) {
+      throw new UnauthorizedException('Invalid password');
+    }
+    if (!(await this.verifyTwoFactorCode(userId, user.twoFactorSecret, code))) {
+      throw new UnauthorizedException('Invalid two-factor code');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { twoFactorEnabled: false, twoFactorSecret: null },
+      });
+      await tx.twoFactorBackupCode.deleteMany({ where: { userId } });
+    });
+  }
+
+  /** Used by other modules (e.g. withdrawals) that require a fresh 2FA code for a sensitive action. */
+  async verifyCodeForUser(userId: string, code: string): Promise<boolean> {
+    const user = await this.users.findByIdOrThrow(userId);
+    if (!user.twoFactorEnabled) return true; // nothing to check if 2FA isn't on
+    return this.verifyTwoFactorCode(userId, user.twoFactorSecret, code);
+  }
+
+  /** A current TOTP code, or an unused backup code (which gets consumed on success). */
+  private async verifyTwoFactorCode(
+    userId: string,
+    secret: string | null,
+    code: string,
+  ): Promise<boolean> {
+    if (secret && this.twoFactor.verifyToken(secret, code)) {
+      return true;
+    }
+
+    const candidates = await this.prisma.twoFactorBackupCode.findMany({
+      where: { userId, usedAt: null },
+    });
+    for (const candidate of candidates) {
+      if (await this.twoFactor.verifyBackupCode(code, candidate.codeHash)) {
+        await this.prisma.twoFactorBackupCode.update({
+          where: { id: candidate.id },
+          data: { usedAt: new Date() },
+        });
+        return true;
+      }
+    }
+    return false;
   }
 
   async refresh(refreshToken: string) {

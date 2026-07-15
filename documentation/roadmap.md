@@ -186,9 +186,13 @@
 - [ ] Mailpit у docker-compose, лист із посиланням, `emailVerified = true`
 
 ### 5.3 2FA (TASK-010)
-- [ ] TOTP: QR-код, підтвердження коду, резервні коди
-- [ ] Вимкнення тільки після повторної перевірки пароля
-- [ ] 2FA-виклик на вхід і виведення
+- [x] TOTP: `TwoFactorService` (otplib v12, чиста логіка, 6 unit-тестів) — генерація секрету, otpauth:// URL, QR-код (data URL), верифікація коду
+- [x] `POST /api/auth/2fa/setup` (генерує pending-секрет + QR), `POST /api/auth/2fa/confirm` (код → вмикає 2FA + видає 10 резервних кодів, argon2-хеші, показуються один раз)
+- [x] Вимкнення тільки після повторної перевірки пароля: `POST /api/auth/2fa/disable` (password + code)
+- [x] 2FA-виклик на вхід: `login` повертає `{requiresTwoFactor: true}` без токенів, якщо ввімкнено і код не наданий; фронтенд (LoginPage) показує другий крок
+- [x] 2FA-виклик на виведення: `WalletsService.createWithdrawal` викликає `AuthService.verifyCodeForUser` (TOTP або резервний код, який одразу позначається використаним)
+- [x] Frontend: сторінка `/settings` (QR + підтвердження + показ backup-кодів + вимкнення), поле 2FA-коду у формі виведення
+- [ ] **Не перевірено на живій БД** (та сама причина з Docker) — потрібна нова міграція для `twoFactorSecret`/`TwoFactorBackupCode`
 
 ### 5.4 Токени та захист API (TASK-042)
 - [ ] Refresh token rotation + збереження/відкликання в БД

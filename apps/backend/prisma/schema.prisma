@@ -105,21 +105,38 @@ model User {
   status              UserStatus @default(ACTIVE)
   emailVerified       Boolean    @default(false) @map("email_verified")
   twoFactorEnabled    Boolean    @default(false) @map("two_factor_enabled")
+  twoFactorSecret     String?    @map("two_factor_secret")
   failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
   lockedUntil         DateTime?  @map("locked_until")
   createdAt           DateTime   @default(now()) @map("created_at")
   updatedAt           DateTime   @updatedAt @map("updated_at")
 
-  accounts     Account[]
-  orders       Order[]
-  loginAudits  LoginAudit[]
-  buyerTrades  Trade[]       @relation("BuyerTrades")
-  sellerTrades Trade[]       @relation("SellerTrades")
-  deposits     Deposit[]
-  withdrawals  Withdrawal[]
-  auditLogs    AuditLog[]
+  accounts             Account[]
+  orders               Order[]
+  loginAudits          LoginAudit[]
+  buyerTrades          Trade[]               @relation("BuyerTrades")
+  sellerTrades         Trade[]               @relation("SellerTrades")
+  deposits             Deposit[]
+  withdrawals          Withdrawal[]
+  auditLogs            AuditLog[]
+  twoFactorBackupCodes TwoFactorBackupCode[]
 
   @@map("users")
+}
+
+/**
+ * One-time-use recovery codes issued when 2FA is confirmed; each is hashed, never stored in plaintext.
+ */
+model TwoFactorBackupCode {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id])
+  codeHash  String    @map("code_hash")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("two_factor_backup_codes")
 }
 
 model LoginAudit {
@@ -137,7 +154,9 @@ model LoginAudit {
   @@map("login_audits")
 }
 
-/** Append-only trail of admin/system actions — separate from LoginAudit (auth-specific). */
+/**
+ * Append-only trail of admin/system actions — separate from LoginAudit (auth-specific).
+ */
 model AuditLog {
   id         String   @id @default(uuid())
   actorId    String?  @map("actor_id")

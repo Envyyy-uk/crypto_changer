@@ -17,6 +17,7 @@ export default function WalletPage() {
   const [withdrawAsset, setWithdrawAsset] = useState('USDT');
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawAddress, setWithdrawAddress] = useState('');
+  const [withdrawTwoFactorCode, setWithdrawTwoFactorCode] = useState('');
   const [withdrawMessage, setWithdrawMessage] = useState<string | null>(null);
   const [withdrawBusy, setWithdrawBusy] = useState(false);
 
@@ -69,10 +70,12 @@ export default function WalletPage() {
         asset: withdrawAsset,
         amount: withdrawAmount,
         address: withdrawAddress,
+        ...(withdrawTwoFactorCode ? { twoFactorCode: withdrawTwoFactorCode } : {}),
       });
       setWithdrawMessage(`Withdrawal of ${withdrawAmount} ${withdrawAsset} submitted for processing.`);
       setWithdrawAmount('');
       setWithdrawAddress('');
+      setWithdrawTwoFactorCode('');
       await refreshAll();
     } catch (e) {
       setWithdrawMessage((e as Error).message);
@@ -183,6 +186,14 @@ export default function WalletPage() {
                 onChange={(e) => setWithdrawAddress(e.target.value)}
                 placeholder="test-address-anything"
                 required
+              />
+            </div>
+            <div>
+              <label>2FA code (only if enabled in Settings)</label>
+              <input
+                value={withdrawTwoFactorCode}
+                onChange={(e) => setWithdrawTwoFactorCode(e.target.value)}
+                placeholder="123456"
               />
             </div>
             {withdrawMessage && <div className="muted">{withdrawMessage}</div>}

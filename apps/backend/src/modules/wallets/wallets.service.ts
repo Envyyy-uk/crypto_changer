@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { SYSTEM_ACCOUNTS } from '@crypto-exchange/config';
 import { isPositive, toDecimal } from '@crypto-exchange/validation';
 import {
@@ -10,6 +10,7 @@ import {
 import { InsufficientBalanceError } from '../../common/errors/domain.errors';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AssetsService } from '../assets/assets.service';
+import { AuthService } from '../auth/auth.service';
 import { LedgerService } from '../ledger/ledger.service';
 import { CreateDepositDto } from './dto/create-deposit.dto';
 import { CreateWithdrawalDto } from './dto/create-withdrawal.dto';
@@ -27,6 +28,7 @@ export class WalletsService {
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
     private readonly assets: AssetsService,
+    private readonly auth: AuthService,
   ) {}
 
   async createDeposit(userId: string, dto: CreateDepositDto) {
@@ -93,6 +95,9 @@ export class WalletsService {
     }
     if (!isPositive(dto.amount)) {
       throw new BadRequestException('Amount must be positive');
+    }
+    if (!(await this.auth.verifyCodeForUser(userId, dto.twoFactorCode ?? ''))) {
+      throw new UnauthorizedException('Invalid two-factor code');
     }
 
     let withdrawal;
