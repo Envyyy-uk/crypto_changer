@@ -13,6 +13,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { BalancesModule } from './modules/balances/balances.module';
 import { LedgerModule } from './modules/ledger/ledger.module';
 import { MarketDataModule } from './modules/market-data/market-data.module';
+import { MarketMakerModule } from './modules/market-maker/market-maker.module';
 import { MarketsModule } from './modules/markets/markets.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OrdersModule } from './modules/orders/orders.module';
@@ -39,6 +40,7 @@ import { WalletsModule } from './modules/wallets/wallets.module';
     OrdersModule,
     TradesModule,
     MarketDataModule,
+    MarketMakerModule,
     WalletsModule,
     AdminModule,
     NotificationsModule,

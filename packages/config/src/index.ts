@@ -13,3 +13,24 @@ export const SYSTEM_ACCOUNTS = {
 } as const;
 
 export type SystemAccountCode = (typeof SYSTEM_ACCOUNTS)[keyof typeof SYSTEM_ACCOUNTS];
+
+/** Well-known email identifying the market-maker bot's system user account. */
+export const MARKET_MAKER_EMAIL = 'marketmaker@system.local';
+
+/** Seed balances granted to the market-maker bot once, on first boot. */
+export const MARKET_MAKER_SEED_BALANCES: Record<string, string> = {
+  BTC: '10',
+  ETH: '100',
+  SOL: '2000',
+  USDT: '5000000',
+};
+
+/** Per-market order size the bot quotes at each of its book levels. */
+export const MARKET_MAKER_QUOTE_QUANTITY: Record<string, string> = {
+  BTCUSDT: '0.05',
+  ETHUSDT: '0.5',
+  SOLUSDT: '20',
+};
+
+/** Basis-point offsets from mid price for the bot's resting levels on each side. */
+export const MARKET_MAKER_LEVEL_OFFSETS_BPS = [2, 5, 10];

@@ -13,4 +13,8 @@ export const configuration = () => ({
     durationMinutes: parseInt(process.env.LOGIN_LOCKOUT_DURATION_MINUTES ?? '15', 10),
   },
   testLiquidityUsdt: process.env.TEST_LIQUIDITY_USDT_AMOUNT ?? '100000',
+  marketMaker: {
+    enabled: (process.env.MARKET_MAKER_ENABLED ?? 'true') === 'true',
+    intervalMs: parseInt(process.env.MARKET_MAKER_INTERVAL_MS ?? '5000', 10),
+  },
 });

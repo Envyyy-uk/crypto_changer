@@ -12,9 +12,9 @@ Monorepo (npm workspaces). One NestJS backend exposes a REST API under `/api`; P
 ┌────────────┐             │  assets ── markets             │
 │   Admin    │ ──────────► │  ledger ── balances ── holds   │
 └────────────┘             │  orders ── matching ── trades  │
-┌────────────┐             │  market-data                   │
-│ MM bot (M3)│ ──────────► │  wallets (M4) ── p2p (M5)      │
-└────────────┘             └───────┬────────────────┬───────┘
+                            │  market-data ── market-maker   │
+                            │  wallets (M4) ── p2p (M5)      │
+                            └───────┬────────────────┬───────┘
                                    │                │
                              PostgreSQL          Redis
 ```
@@ -33,6 +33,7 @@ Monorepo (npm workspaces). One NestJS backend exposes a REST API under `/api`; P
 | `matching` | Per-market price-time priority engine, settlement (fills, fees, holds) | M2 |
 | `trades` | Executions, fills, fee records | M2 |
 | `market-data` | External price feed ingestion, candles, WS fan-out | M2 |
+| `market-maker` | System bot user quoting live-priced levels so the book is never empty | M3 |
 | `wallets` | Deposit/withdrawal simulator, later testnet adapters | M4 |
 | `admin` | User/market management, balance adjustments via ledger | M4 |
 | `p2p` | P2P marketplace: ads, escrow, disputes ([design](p2p-design.md)) | M5 |
