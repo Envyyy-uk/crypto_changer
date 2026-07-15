@@ -30,6 +30,24 @@ export interface Balance {
   locked: string;
 }
 
+export interface OrderBookLevel {
+  price: string;
+  quantity: string;
+}
+
+export interface OrderBookSnapshot {
+  bids: OrderBookLevel[];
+  asks: OrderBookLevel[];
+}
+
+export interface RecentTrade {
+  id: string;
+  price: string;
+  quantity: string;
+  side: 'BUY' | 'SELL';
+  createdAt: string;
+}
+
 export interface Order {
   id: string;
   side: 'BUY' | 'SELL';

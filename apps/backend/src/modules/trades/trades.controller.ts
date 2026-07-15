@@ -1,4 +1,11 @@
-import { Controller, Get, ParseIntPipe, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  ParseIntPipe,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   AuthenticatedUser,
   CurrentUser,
@@ -7,11 +14,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TradesService } from './trades.service';
 
 @Controller('trades')
-@UseGuards(JwtAuthGuard)
 export class TradesController {
   constructor(private readonly trades: TradesService) {}
 
   @Get('history')
+  @UseGuards(JwtAuthGuard)
   listHistory(
     @CurrentUser() user: AuthenticatedUser,
     @Query('market') market?: string,
@@ -19,5 +26,14 @@ export class TradesController {
     @Query('pageSize', new ParseIntPipe({ optional: true })) pageSize?: number,
   ) {
     return this.trades.listHistory(user.userId, { market, page, pageSize });
+  }
+
+  /** Public trade tape — no authentication, no buyer/seller identity exposed. */
+  @Get('recent/:symbol')
+  listRecent(
+    @Param('symbol') symbol: string,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+  ) {
+    return this.trades.listRecent(symbol, limit);
   }
 }

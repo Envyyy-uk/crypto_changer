@@ -20,4 +20,24 @@ export class TradesService {
       take: pageSize,
     });
   }
+
+  /**
+   * Public trade tape for a market: no buyer/seller identity, just price,
+   * quantity and the taker's side (the conventional "aggressor" color).
+   */
+  async listRecent(symbol: string, limit = 50) {
+    const trades = await this.prisma.trade.findMany({
+      where: { market: { symbol: symbol.toUpperCase() } },
+      include: { takerOrder: { select: { side: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(100, Math.max(1, limit)),
+    });
+    return trades.map((trade) => ({
+      id: trade.id,
+      price: trade.price,
+      quantity: trade.quantity,
+      side: trade.takerOrder.side,
+      createdAt: trade.createdAt,
+    }));
+  }
 }

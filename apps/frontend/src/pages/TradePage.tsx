@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { api, isLoggedIn } from '../api/client';
 import { Balance, Market, Order } from '../api/types';
 import CandleChart from '../components/CandleChart';
+import OrderBook from '../components/OrderBook';
+import TradeTape from '../components/TradeTape';
 import { formatPrice, useTickers } from '../hooks/useTickers';
 
 export default function TradePage() {
@@ -129,9 +131,19 @@ export default function TradePage() {
           </table>
         </div>
 
-        {/* Middle: candlestick chart (live external data) */}
-        <div className="panel" style={{ minHeight: 440 }}>
-          <CandleChart symbol={symbol.toUpperCase()} />
+        {/* Middle: candlestick chart (live external data) + recent trades */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="panel" style={{ minHeight: 440 }}>
+            <CandleChart symbol={symbol.toUpperCase()} />
+          </div>
+          <div className="panel">
+            <TradeTape symbol={symbol.toUpperCase()} />
+          </div>
+        </div>
+
+        {/* Order book: this exchange's own book, quoted live by the market-maker */}
+        <div className="panel">
+          <OrderBook symbol={symbol.toUpperCase()} />
         </div>
 
         {/* Right: order form */}
