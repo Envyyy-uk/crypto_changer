@@ -7,5 +7,6 @@ import { MarketMakerService } from './market-maker.service';
 @Module({
   imports: [LedgerModule, OrdersModule, MarketDataModule],
   providers: [MarketMakerService],
+  exports: [MarketMakerService],
 })
 export class MarketMakerModule {}

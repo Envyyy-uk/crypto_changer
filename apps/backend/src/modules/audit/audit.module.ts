@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
+import { AuditService } from './audit.service';
 
-// Placeholder module — implemented in a later milestone (see documentation/roadmap.md).
-@Module({})
+@Module({
+  providers: [AuditService],
+  exports: [AuditService],
+})
 export class AuditModule {}

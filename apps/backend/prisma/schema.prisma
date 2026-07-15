@@ -117,6 +117,7 @@ model User {
   sellerTrades Trade[]       @relation("SellerTrades")
   deposits     Deposit[]
   withdrawals  Withdrawal[]
+  auditLogs    AuditLog[]
 
   @@map("users")
 }
@@ -134,6 +135,22 @@ model LoginAudit {
 
   @@index([email, createdAt])
   @@map("login_audits")
+}
+
+/** Append-only trail of admin/system actions — separate from LoginAudit (auth-specific). */
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?  @map("actor_id")
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String
+  targetType String?  @map("target_type")
+  targetId   String?  @map("target_id")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
 
 // ============================================================

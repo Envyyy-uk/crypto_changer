@@ -30,6 +30,7 @@ export class MarketMakerService implements OnModuleInit, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
   private botUserId: string | null = null;
   private refreshing = false;
+  private intervalMs = 5000;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -40,22 +41,39 @@ export class MarketMakerService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit() {
-    if (!this.config.get<boolean>('marketMaker.enabled')) {
-      this.logger.log('Market-maker disabled (MARKET_MAKER_ENABLED=false)');
-      return;
-    }
-
+    this.intervalMs = this.config.get<number>('marketMaker.intervalMs') ?? 5000;
     this.botUserId = await this.ensureBotUser();
     await this.seedBalances(this.botUserId);
 
-    const intervalMs = this.config.get<number>('marketMaker.intervalMs') ?? 5000;
-    this.timer = setInterval(() => void this.refreshAll(), intervalMs);
-    void this.refreshAll(); // don't wait for the first tick to provide initial liquidity
-    this.logger.log(`Market-maker active (user ${this.botUserId}, refresh every ${intervalMs}ms)`);
+    if (!this.config.get<boolean>('marketMaker.enabled')) {
+      this.logger.log('Market-maker disabled (MARKET_MAKER_ENABLED=false) — user provisioned but idle');
+      return;
+    }
+    this.start();
   }
 
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
+  }
+
+  /** Used by the admin panel to start/stop simulated liquidity at runtime. */
+  start() {
+    if (this.timer || !this.botUserId) return;
+    this.timer = setInterval(() => void this.refreshAll(), this.intervalMs);
+    void this.refreshAll();
+    this.logger.log(`Market-maker active (user ${this.botUserId}, refresh every ${this.intervalMs}ms)`);
+  }
+
+  pause() {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = undefined;
+      this.logger.log('Market-maker paused');
+    }
+  }
+
+  isRunning(): boolean {
+    return this.timer !== undefined;
   }
 
   private async ensureBotUser(): Promise<string> {

@@ -149,15 +149,20 @@
 - [ ] **Код написаний і зібраний чисто, але НЕ перевірений на живій БД** — Docker Desktop завис під час цієї сесії (~15+ хв, движок не відповідав навіть після повного перезапуску); користувач вирішив зупинитись на цьому до відновлення бази. Коли Docker підніметься: `prisma migrate dev --name add_deposits_withdrawals`, потім E2E (deposit → CONFIRMED → баланс +amount; withdrawal → available -amount одразу → PENDING→APPROVED→PROCESSING→COMPLETED)
 
 ### 4.2 Адмінпанель (TASK-039…040)
-- [ ] `apps/admin` (React) + admin-модуль API з RBAC
-- [ ] Користувачі: список, блокування, блокування торгівлі/виведення
-- [ ] Перегляд балансів, ордерів, угод будь-якого користувача
-- [ ] Керування ринками: HALTED / CANCEL_ONLY, зміна комісій
-- [ ] Коригування балансу тільки через ledger-операцію (User, Asset, Amount, Reason, Admin) + audit
-- [ ] Запуск/зупинка маркетмейкера
+- [x] Admin-модуль API з RBAC: `@Roles(ADMIN, SUPER_ADMIN)` + `RolesGuard` (перевірено unit-тестами, 4/4)
+- [x] Користувачі: `GET /api/admin/users` (список), `GET /api/admin/users/:id` (баланси/ордери/угоди/депозити/виведення), `PATCH /api/admin/users/:id/status` (ACTIVE/SUSPENDED/BLOCKED)
+- [x] Перегляд балансів, ордерів, угод будь-якого користувача (у `getUserDetail`)
+- [x] Керування ринками: `GET/PATCH /api/admin/markets/:symbol` — статус (ACTIVE/HALTED/CANCEL_ONLY/DISABLED), maker/taker fee
+- [x] Коригування балансу тільки через ledger-операцію: `POST /api/admin/balance-adjustments` (userId, asset, підписана сума, reason) — DEBIT/CREDIT системного рахунку ADMIN_ADJUSTMENT, ніколи прямий UPDATE
+- [x] Запуск/зупинка маркетмейкера: `GET/POST /api/admin/market-maker/{status,pause,resume}` (MarketMakerService.pause/start/isRunning)
+- [ ] Окремий `apps/admin` React-фронтенд — не зроблено, є тільки API. Керувати поки можна через curl/Postman/adminer
+- [ ] **Не перевірено на живій БД** (та сама причина — Docker завис цієї сесії). Потребує вручну підняти роль User.role до ADMIN через psql для першого тестового адміна
 
 ### 4.3 Повний audit log (TASK-041)
-- [ ] Всі події: реєстрація, входи, паролі, 2FA, ордери, депозити, виведення, дії адміна, зміни ринків
+- [x] `AuditLog` модель + `AuditService` (append-only, actorId/action/targetType/targetId/metadata JSON)
+- [x] Записується для: зміни статусу користувача, зміни ринку, коригування балансу, пауза/резюм маркетмейкера
+- [x] `GET /api/admin/audit-log` (пагінація, фільтр за targetType)
+- [ ] Ще не пише: реєстрація, паролі, 2FA, ордери, депозити/виведення (LoginAudit вже покриває входи окремо з М1)
 
 ### 4.4 Testnet (TASK-038, опційно)
 - [ ] Anvil (local Ethereum) + тестовий ERC-20, Bitcoin regtest
