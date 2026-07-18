@@ -145,8 +145,8 @@
 - [x] «Add test funds»: вибір активу й суми, статуси PENDING → CONFIRMED через ledger (симуляція затримки підтвердження ~2с)
 - [x] Виведення: адреса, статуси PENDING → APPROVED → PROCESSING → COMPLETED (автопрогрес по таймеру, ~1.5с/крок); кошти списуються з available одразу при створенні (system-рахунок WITHDRAWAL_SUSPENSE), без окремого Hold (Hold прив'язаний до Order у схемі)
 - [x] Історія депозитів і виведень (backend + сторінка Wallet: форми + таблиці історії з поллінгом)
-- [ ] 2FA-код при виведенні (DTO вже приймає `twoFactorCode`, але не перевіряється — 2FA ще не реалізовано, чекає Майлстоуна 5)
-- [ ] **Код написаний і зібраний чисто, але НЕ перевірений на живій БД** — Docker Desktop завис під час цієї сесії (~15+ хв, движок не відповідав навіть після повного перезапуску); користувач вирішив зупинитись на цьому до відновлення бази. Коли Docker підніметься: `prisma migrate dev --name add_deposits_withdrawals`, потім E2E (deposit → CONFIRMED → баланс +amount; withdrawal → available -amount одразу → PENDING→APPROVED→PROCESSING→COMPLETED)
+- [x] 2FA-код при виведенні — реалізовано й перевірено (див. 5.3)
+- [x] **Перевірено на живій БД (2026-07-18)**: реєстрація → deposit 1000 USDT → PENDING → CONFIRMED за ~2с → баланс 101000 → withdrawal 500 USDT → available списався миттєво (100500) → PENDING→APPROVED→PROCESSING→COMPLETED за ~4.5с
 
 ### 4.2 Адмінпанель (TASK-039…040)
 - [x] Admin-модуль API з RBAC: `@Roles(ADMIN, SUPER_ADMIN)` + `RolesGuard` (перевірено unit-тестами, 4/4)
@@ -156,7 +156,7 @@
 - [x] Коригування балансу тільки через ledger-операцію: `POST /api/admin/balance-adjustments` (userId, asset, підписана сума, reason) — DEBIT/CREDIT системного рахунку ADMIN_ADJUSTMENT, ніколи прямий UPDATE
 - [x] Запуск/зупинка маркетмейкера: `GET/POST /api/admin/market-maker/{status,pause,resume}` (MarketMakerService.pause/start/isRunning)
 - [ ] Окремий `apps/admin` React-фронтенд — не зроблено, є тільки API. Керувати поки можна через curl/Postman/adminer
-- [ ] **Не перевірено на живій БД** (та сама причина — Docker завис цієї сесії). Потребує вручну підняти роль User.role до ADMIN через psql для першого тестового адміна
+- [x] **Перевірено на живій БД (2026-07-18)**: підняв роль тестового юзера до SUPER_ADMIN через psql — список користувачів, зміна maker fee ринку (0.001→0.0015, до/після в metadata), pause/resume маркетмейкера (`running: true→false→true`), баланс-коригування +250 USDT через ledger (не прямий UPDATE) — все спрацювало; audit-log коректно записав actor/action/target/metadata для кожної дії
 
 ### 4.3 Повний audit log (TASK-041)
 - [x] `AuditLog` модель + `AuditService` (append-only, actorId/action/targetType/targetId/metadata JSON)
@@ -192,7 +192,7 @@
 - [x] 2FA-виклик на вхід: `login` повертає `{requiresTwoFactor: true}` без токенів, якщо ввімкнено і код не наданий; фронтенд (LoginPage) показує другий крок
 - [x] 2FA-виклик на виведення: `WalletsService.createWithdrawal` викликає `AuthService.verifyCodeForUser` (TOTP або резервний код, який одразу позначається використаним)
 - [x] Frontend: сторінка `/settings` (QR + підтвердження + показ backup-кодів + вимкнення), поле 2FA-коду у формі виведення
-- [ ] **Не перевірено на живій БД** (та сама причина з Docker) — потрібна нова міграція для `twoFactorSecret`/`TwoFactorBackupCode`
+- [x] **Перевірено на живій БД (2026-07-18)** повним циклом: setup → реальний TOTP-код (`otplib.authenticator.generate`) → confirm (10 backup-кодів видано) → login без коду → `{requiresTwoFactor:true}` → login з кодом → токени → withdrawal без коду → 401 → withdrawal з кодом → PENDING → disable через backup-код (не TOTP) → `twoFactorEnabled:false`. Все спрацювало з першого разу
 
 ### 5.4 Токени та захист API (TASK-042)
 - [ ] Refresh token rotation + збереження/відкликання в БД
