@@ -67,7 +67,7 @@
 - [x] Buy: найвища ціна перша; Sell: найнижча перша; при рівній ціні — FIFO за часом
 - [x] Агрегований snapshot рівнів (для майбутнього `GET /api/orderbook/:symbol`)
 - [x] Відновлення стакана з БД після рестарту (`MatchingService.onModuleInit`, FIFO за createdAt) — перевірено логом "Matching engines ready... N resting order(s) restored"
-- [ ] `GET /api/orderbook/:symbol` REST endpoint (снепшот вже є через `MatchingService.getSnapshot`, лишається обгорнути контролером)
+- [x] `GET /api/orderbook/:symbol` REST endpoint (`MatchingController`) — реалізовано й перевірено (стакан бота відображається у фронтенді)
 
 ### 2.2 Matching engine (TASK-024…025)
 - [x] Крос: виконання коли best Bid ≥ best Ask (ядро, `matching/engine/matching-engine.ts`)
